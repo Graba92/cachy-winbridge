@@ -42,8 +42,10 @@ When users migrate from **Windows to Linux (especially CachyOS / Arch Linux)**, 
 
 - 💾 **Drive & Gaming Automount Wizard**:
   - Automatically scans block devices (`lsblk -J`) across NTFS, Btrfs, and ext4.
+  - 🛡️ **Pre-Flight Safety Check via `findmnt --verify`**: Simulates and validates new fstab additions in an isolated temp environment before touching `/etc/fstab`.
+  - ⚠️ **NTFS Fast-Startup & Hibernation Advisor**: Identifies locked dirty-bit partitions caused by Windows Fast Startup and gives direct resolution commands.
   - Generates bulletproof, Steam/Proton-optimized `/etc/fstab` entries (`uid=1000,gid=1000,windows_names,nofail,x-gvfs-show`).
-  - Safe timestamped backups of existing `/etc/fstab` before changes.
+  - Automatic timestamped backups (`~/.config/cachy-winbridge/backups/`).
   - 1-Click user mounting via `udisksctl`.
 - 📖 **Windows-to-Linux Rosetta Stone**:
   - Live interactive dictionary with 20+ core command translations (`taskmgr` ➔ `btop`, `services.msc` ➔ `systemctl`, `devmgmt.msc` ➔ `lspci`, `sfc /scannow` ➔ `pacman -Qk`).
@@ -51,9 +53,9 @@ When users migrate from **Windows to Linux (especially CachyOS / Arch Linux)**, 
 - 🛒 **Curated Software Catalog**:
   - Maps Windows software to native Linux equivalents (MangoHud, CPU-X, Heroic Games Launcher, EasyEffects, Kate, Ark, Ventoy, Vesktop).
   - Dynamically probes your system to show which tools are already installed, along with 1-click `pacman`/`yay` install commands.
-- 🎮 **Windows Savegame & AppData Migrator**:
-  - Automatically crawls mounted Windows partitions for `Saved Games`, `Documents/My Games`, `AppData/Local`, and `AppData/Roaming`.
-  - 1-click copy directly into your Linux home directory.
+- 🎮 **Windows Savegame & Steam Proton Compatdata Migrator**:
+  - Scans installed Steam libraries (`libraryfolders.vdf` & `appmanifest_*.acf`) and maps Windows savegame directories directly to official **Steam AppIDs**.
+  - 1-click migration straight into the Proton prefix (`compatdata/<APPID>/pfx/drive_c/users/steamuser/...`) with automated timestamped backup before overwrite.
 - 🍷 **Isolated Micro-Prefix Launcher**:
   - Run standalone `.exe` and `.msi` installers inside sandboxed Wine prefixes without cluttering your system.
 - 🖥️ **Dual Interface**:

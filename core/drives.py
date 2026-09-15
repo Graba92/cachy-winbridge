@@ -142,8 +142,22 @@ class DriveManager:
         return partitions
 
     @classmethod
+    def check_ntfs_issue_in_error(cls, err: str) -> Optional[str]:
+        """Erkennt Windows Fast-Startup / Hibernation / Dirty-Bit Muster in Fehlermeldungen."""
+        lower_err = err.lower()
+        if any(keyword in lower_err for keyword in ["hibernat", "unclean", "dirty", "metadata kept in windows cache", "refused to mount"]):
+            return (
+                "⚠️ Windows Fast-Startup / Ruhezustand ist aktiv! Das NTFS-Dateisystem ist gesperrt.\n"
+                "👉 Lösung: Einmal Windows starten und mit gedrückter Shift-Taste auf 'Herunterfahren' klicken,\n"
+                "   oder in Windows als Administrator ausführen: 'powercfg /h off'."
+            )
+        if "notauthorized" in lower_err:
+            return "Hinweis: Einhängen dieser internen Festplatte erfordert Systemrechte (Polkit/Sudo oder /etc/fstab)."
+        return None
+
+    @classmethod
     def mount_partition_user(cls, device_path: str) -> Tuple[bool, str]:
-        """Mounted eine Partition unprivilegiert via udisksctl."""
+        """Mounted eine Partition unprivilegiert via udisksctl mit Fast-Startup Diagnose."""
         if not shutil.which("udisksctl"):
             return False, "udisksctl ist nicht installiert."
         try:
@@ -155,13 +169,18 @@ class DriveManager:
             )
             if res.returncode == 0:
                 return True, res.stdout.strip()
-            return False, res.stderr.strip()
+            
+            raw_err = res.stderr.strip()
+            special_advice = cls.check_ntfs_issue_in_error(raw_err)
+            if special_advice:
+                return False, f"{raw_err}\n{special_advice}"
+            return False, raw_err
         except Exception as e:
             return False, str(e)
 
     @classmethod
     def generate_fstab_backup(cls) -> Path:
-        """Erstellt ein sicheres Backup der aktuellen /etc/fstab."""
+        """Erstellt ein sicheres Backup der aktuellen /etc/fstab mit Zeitstempel."""
         ts = int(time.time())
         bak_dir = Path.home() / ".config" / "cachy-winbridge" / "backups"
         bak_dir.mkdir(parents=True, exist_ok=True)
@@ -169,3 +188,44 @@ class DriveManager:
         if FSTAB_PATH.exists():
             shutil.copy2(FSTAB_PATH, bak_path)
         return bak_path
+
+    @classmethod
+    def verify_fstab_syntax(cls, tab_file: Optional[Path] = None) -> Tuple[bool, str]:
+        """Führt einen Pre-Flight Syntax-Check via findmnt --verify durch."""
+        target = tab_file or FSTAB_PATH
+        if not target.exists():
+            return False, f"Datei {target} existiert nicht."
+
+        if not shutil.which("findmnt"):
+            return True, "findmnt nicht gefunden (Syntax-Prüfung übersprungen)."
+
+        try:
+            res = subprocess.run(
+                ["findmnt", "--verify", "--tab-file", str(target)],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            output = (res.stdout.strip() + "\n" + res.stderr.strip()).strip()
+            if res.returncode == 0:
+                return True, output or "✔ Keine Fehler oder Syntax-Konflikte erkannt."
+            return False, output or "Unbekannter Syntax-Fehler in fstab-Tabelle."
+        except Exception as e:
+            return False, f"Fehler bei findmnt Überprüfung: {e}"
+
+    @classmethod
+    def validate_fstab_addition(cls, new_entries: List[str]) -> Tuple[bool, str]:
+        """Erstellt eine Test-fstab in /tmp und validiert sie vorab risikofrei."""
+        current_content = FSTAB_PATH.read_text(encoding="utf-8") if FSTAB_PATH.exists() else ""
+        test_file = Path(f"/tmp/fstab.verify.{os.getpid()}")
+        try:
+            combined = current_content + "\n# --- Cachy-WinBridge Safe Addition ---\n" + "\n".join(new_entries) + "\n"
+            test_file.write_text(combined, encoding="utf-8")
+            ok, msg = cls.verify_fstab_syntax(tab_file=test_file)
+            return ok, msg
+        finally:
+            if test_file.exists():
+                try:
+                    test_file.unlink()
+                except Exception:
+                    pass

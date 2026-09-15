@@ -42,8 +42,10 @@ Wer von **Windows auf Linux (speziell CachyOS oder Arch Linux)** umsteigt, stö�
 
 - 💾 **Laufwerk- & Gaming-Automount Wizard**:
   - Scannt Blockgeräte via `lsblk -J` über NTFS, Btrfs und ext4.
-  - Generiert Steam/Proton-optimierte `/etc/fstab` Einträge mit sicheren Optionen (`uid=1000,gid=1000,windows_names,nofail,x-gvfs-show`).
-  - Erstellt automatisch zeitgestempelte Backups der aktuellen `/etc/fstab`.
+  - 🛡️ **Pre-Flight Sicherheitscheck mit `findmnt --verify`**: Simuliert und validiert neue fstab-Einträge risikofrei in einer isolierten Testumgebung, bevor jemals etwas an `/etc/fstab` verändert wird.
+  - ⚠️ **NTFS Fast-Startup & Hibernation Diagnose**: Erkennt gesperrte Dirty-Bit-Partitionen durch Windows-Schnellstart/Ruhezustand und liefert präzise Lösungsanleitungen.
+  - Generiert Steam/Proton-optimierte `/etc/fstab` Einträge mit praxiserprobten Optionen (`uid=1000,gid=1000,windows_names,nofail,x-gvfs-show`).
+  - Erstellt automatisch zeitgestempelte Backups (`~/.config/cachy-winbridge/backups/`).
   - 1-Klick-Mount ohne Root-Passwort via `udisksctl`.
 - 📖 **Windows-zu-Linux Rosetta Stone**:
   - Interaktives Nachschlagewerk mit über 20 Kernbefehlen und Konzepten (`taskmgr` ➔ `btop`, `services.msc` ➔ `systemctl`, `devmgmt.msc` ➔ `lspci`, `sfc /scannow` ➔ `pacman -Qk`).
@@ -51,9 +53,9 @@ Wer von **Windows auf Linux (speziell CachyOS oder Arch Linux)** umsteigt, stö�
 - 🛒 **Kuratierter Software-Katalog**:
   - Zeigt Umsteigern die idealen Linux-Pendants zu bekannten Windows-Tools (MangoHud, CPU-X, Heroic Games Launcher, EasyEffects, Kate, Ark, Ventoy, Vesktop).
   - Erkennt live, welche Programme bereits auf dem System installiert sind, inklusive fertiger `pacman`/`yay` Installationsbefehle.
-- 🎮 **Windows Spielstand- & AppData-Migrator**:
-  - Durchsucht gemountete Windows-Laufwerke nach Benutzerordnern wie `Saved Games`, `Documents/My Games`, `AppData/Local` und `AppData/Roaming`.
-  - 1-Klick-Übernahme direkt in das persönliche Linux-Home-Verzeichnis.
+- 🎮 **Windows Spielstand- & Steam Proton Compatdata-Migrator**:
+  - Scannt installierte Steam-Bibliotheken (`libraryfolders.vdf` & `appmanifest_*.acf`) und ordnet Windows-Spielstände automatisch den passenden **Steam AppIDs** zu.
+  - Kopiert Saves direkt in den isolierten Proton-Prefix (`compatdata/<APPID>/pfx/drive_c/users/steamuser/...`) inklusive automatischem Sicherheits-Backup vor dem Überschreiben.
 - 🍷 **Isolierter Micro-Prefix Launcher**:
   - Startet einzelne `.exe` und `.msi` Dateien in isolierten, sauberen Wine-Prefixen, ohne das System zu vermüllen.
 - 🖥️ **Zwei Bedienoberflächen**:

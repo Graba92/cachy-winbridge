@@ -82,14 +82,36 @@ def render_apps_table(apps: List[AppEquivalent]) -> None:
     console.print(table)
 
 def render_savegames_table(saves: List[DiscoveredSavegame]) -> None:
-    table = Table(title=f"🎮 Gefundene Windows-Spielstände ({len(saves)})", border_style="yellow", show_header=True, expand=True)
+    table = Table(title=f"🎮 Gefundene Windows-Spielstände & Steam Proton Status ({len(saves)})", border_style="yellow", show_header=True, expand=True)
     table.add_column("Spiel / Ordner", style="bold cyan", width=22)
-    table.add_column("Kategorie", style="magenta", width=20)
-    table.add_column("Größe", justify="right", width=12)
-    table.add_column("Windows-Benutzer", style="yellow", width=16)
-    table.add_column("Pfad", style="dim white")
+    table.add_column("Kategorie", style="magenta", width=18)
+    table.add_column("Größe", justify="right", width=10)
+    table.add_column("Steam AppID", justify="center", width=16)
+    table.add_column("Proton Prefix Status", width=24)
+    table.add_column("Zielpfad / Quelle", style="dim white")
 
     for s in saves:
-        table.add_row(s.game_title, s.category, f"{s.size_mb} MB", s.user_name, s.source_path)
+        if s.matched_appid:
+            appid_str = f"[bold cyan]#{s.matched_appid}[/]"
+            if s.is_proton_ready:
+                proton_status = "[bold green]✔ Prefix bereit[/]"
+                target_str = f"[green]{s.proton_target_dir}[/]"
+            else:
+                proton_status = "[yellow]⏳ Prefix ungenutzt[/]"
+                target_str = f"[dim]{s.proton_target_dir}[/dim]"
+        else:
+            appid_str = "[dim]Nicht erkannt[/dim]"
+            proton_status = "[dim]Manuell / DRM-frei[/dim]"
+            target_str = s.source_path
+
+        table.add_row(
+            s.game_title,
+            s.category,
+            f"{s.size_mb} MB",
+            appid_str,
+            proton_status,
+            target_str
+        )
 
     console.print(table)
+

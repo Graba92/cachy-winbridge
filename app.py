@@ -43,10 +43,33 @@ def cmd_drives(args: argparse.Namespace) -> None:
     if args.generate_fstab:
         console.print("\n[bold green]Empfohlene /etc/fstab Einträge für dauerhaftes Gaming-Automounting:[/]")
         console.print("[dim]Kopiere diese Zeilen in /etc/fstab oder nutze das automatische Backup.[/dim]\n")
+        lines_to_add = []
         for p in partitions:
             if not p.is_in_fstab:
                 console.print(f"[bold cyan]# {p.label} ({p.name}, {p.fstype})[/]")
                 console.print(f"{p.recommended_fstab_line}\n")
+                lines_to_add.append(p.recommended_fstab_line)
+
+        if lines_to_add:
+            valid, verify_msg = DriveManager.validate_fstab_addition(lines_to_add)
+            if valid:
+                console.print(f"[bold green]🛡️ Pre-Flight Sicherheitscheck bestanden (findmnt --verify):[/]\n{verify_msg}\n")
+            else:
+                console.print(f"[bold yellow]🛡️ Pre-Flight Sicherheitsanalyse (findmnt --verify):[/]\n{verify_msg}")
+                missing_dirs = [p.recommended_mount_dir for p in partitions if not p.is_in_fstab and not Path(p.recommended_mount_dir).exists()]
+                if missing_dirs:
+                    mkdir_cmd = "sudo mkdir -p " + " ".join(missing_dirs)
+                    console.print(f"[bold cyan]👉 Vorab Mount-Verzeichnisse erstellen:[/] [white]{mkdir_cmd}[/]\n")
+
+
+def cmd_fstab_verify(args: argparse.Namespace) -> None:
+    render_banner()
+    console.print("[bold cyan]Führe Pre-Flight Syntax-Check der /etc/fstab via findmnt durch...[/]")
+    ok, msg = DriveManager.verify_fstab_syntax()
+    if ok:
+        console.print(f"[bold green]✔ {msg}[/]")
+    else:
+        console.print(f"[bold red]❌ {msg}[/]")
 
 
 def cmd_mount_all(args: argparse.Namespace) -> None:
@@ -79,13 +102,27 @@ def cmd_apps(args: argparse.Namespace) -> None:
 
 def cmd_migrator(args: argparse.Namespace) -> None:
     render_banner()
-    console.print("[bold cyan]Scanne gemountete Datenträger nach Windows-Profilen und Spielständen...[/]")
+    console.print("[bold cyan]Scanne gemountete Datenträger nach Windows-Profilen und Steam Proton Spielständen...[/]")
     saves = WindowsMigrator.scan_savegames(custom_root=args.path)
     if not saves:
         console.print("[bold yellow]Keine Windows-Profile oder Spielstände in Standard-Mountpunkten (/mnt, /run/media) gefunden.[/]")
         console.print("[dim]Hinweis: Stelle sicher, dass deine Windows-Partitionen gemountet sind (z.B. mit 'cachy-winbridge mount-all').[/dim]")
     else:
         render_savegames_table(saves)
+        if args.migrate_proton:
+            console.print("\n[bold green]Starte automatische Migration in Steam Proton Compatdata-Prefixe...[/]")
+            migrated = 0
+            for s in saves:
+                if s.is_proton_ready:
+                    ok, msg = WindowsMigrator.migrate_savegame_to_proton(s)
+                    if ok:
+                        console.print(f"[bold green]✔ {s.game_title}: {msg}[/]")
+                        migrated += 1
+                    else:
+                        console.print(f"[bold red]❌ {s.game_title}: {msg}[/]")
+                else:
+                    console.print(f"[dim]• {s.game_title}: Übersprungen (Kein aktiver Proton-Prefix für AppID #{s.matched_appid})[/dim]")
+            console.print(f"\n[bold cyan]Migration beendet:[/] {migrated} Spielstände erfolgreich übertragen.")
 
 
 def cmd_run_exe(args: argparse.Namespace) -> None:
@@ -117,11 +154,15 @@ def main() -> None:
 
     # drives
     p_drives = subparsers.add_parser("drives", help="Erkennt Blockgeräte und zeigt Proton-sichere Mount-Optionen")
-    p_drives.add_argument("--generate-fstab", action="store_true", help="Gibt optimierte /etc/fstab Zeilen aus")
+    p_drives.add_argument("--generate-fstab", action="store_true", help="Gibt optimierte /etc/fstab Zeilen inkl. findmnt-Sicherheitscheck aus")
     p_drives.set_defaults(func=cmd_drives)
 
+    # fstab-verify
+    p_fstab = subparsers.add_parser("fstab-verify", help="Führt einen Pre-Flight Syntax- & Konsistenz-Check der /etc/fstab durch")
+    p_fstab.set_defaults(func=cmd_fstab_verify)
+
     # mount-all
-    p_mount = subparsers.add_parser("mount-all", help="Hängt ungemountete Partitionen via udisksctl ein")
+    p_mount = subparsers.add_parser("mount-all", help="Hängt ungemountete Partitionen via udisksctl ein (inkl. Fast-Startup Diagnose)")
     p_mount.set_defaults(func=cmd_mount_all)
 
     # rosetta
@@ -134,8 +175,9 @@ def main() -> None:
     p_apps.set_defaults(func=cmd_apps)
 
     # migrator
-    p_migrator = subparsers.add_parser("migrator", help="Sucht nach alten Windows-Spielständen und Dokumenten")
+    p_migrator = subparsers.add_parser("migrator", help="Sucht nach alten Windows-Spielständen und verknüpft Steam Proton Prefixe")
     p_migrator.add_argument("--path", type=str, default=None, help="Benutzerdefinierter Suchpfad")
+    p_migrator.add_argument("--migrate-proton", action="store_true", help="Kopiert erkannte Spielstände direkt in den isolierten Steam Proton compatdata Prefix")
     p_migrator.set_defaults(func=cmd_migrator)
 
     # run-exe

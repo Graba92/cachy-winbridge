@@ -268,23 +268,25 @@ class WinBridgeApp(App):
     # --- SAVES TAB LOGIC ---
     def init_saves_table(self) -> None:
         dt = self.query_one("#saves_table", DataTable)
-        dt.add_columns("Spiel / Ordner", "Kategorie", "Größe", "Benutzer", "Quellpfad")
+        dt.add_columns("Spiel / Ordner", "Kategorie", "Größe", "Steam AppID", "Proton Zielpfad / Quelle")
 
     def scan_savegames(self) -> None:
         info = self.query_one("#saves_info", Static)
-        info.update("Scanne gemountete Windows-Laufwerke...")
+        info.update("Scanne gemountete Windows-Laufwerke und Steam Proton Compatdata-Prefixe...")
         self.savegames = WindowsMigrator.scan_savegames()
         dt = self.query_one("#saves_table", DataTable)
         dt.clear()
         for s in self.savegames:
+            appid_col = f"#{s.matched_appid}" if s.matched_appid else "—"
+            target_col = s.proton_target_dir if s.proton_target_dir else s.source_path
             dt.add_row(
                 s.game_title,
                 s.category,
                 f"{s.size_mb} MB",
-                s.user_name,
-                s.source_path
+                appid_col,
+                target_col
             )
-        info.update(f"Scan abgeschlossen: {len(self.savegames)} Spielstand-Ordner aufgespürt.")
+        info.update(f"Scan abgeschlossen: {len(self.savegames)} Spielstände erkannt. Proton-kompatible Saves werden direkt in den Compatdata-Prefix übertragen.")
 
     def copy_selected_save(self) -> None:
         dt = self.query_one("#saves_table", DataTable)
@@ -294,12 +296,19 @@ class WinBridgeApp(App):
             return
 
         save = self.savegames[dt.cursor_row]
-        dest_dir = Path.home() / "Gefundene_Savegames"
-        ok = WindowsMigrator.copy_savegame(save.source_path, str(dest_dir))
-        if ok:
-            info.update(f"[bold green]Kopiert: {save.game_title} ➔ {dest_dir / save.game_title}[/]")
+        if save.is_proton_ready:
+            ok, msg = WindowsMigrator.migrate_savegame_to_proton(save)
+            if ok:
+                info.update(f"[bold green]✔ Direkt in Steam Proton übertragen: {save.game_title}[/]")
+            else:
+                info.update(f"[bold red]{msg}[/]")
         else:
-            info.update(f"[bold red]Fehler beim Kopieren von {save.game_title}![/]")
+            dest_dir = Path.home() / "Gefundene_Savegames"
+            ok = WindowsMigrator.copy_savegame(save.source_path, str(dest_dir))
+            if ok:
+                info.update(f"[bold yellow]Kopiert nach {dest_dir / save.game_title} (Kein aktiver Proton-Prefix für #{save.matched_appid})[/]")
+            else:
+                info.update(f"[bold red]Fehler beim Kopieren von {save.game_title}![/]")
 
 
 def start_tui() -> None:
